@@ -7,16 +7,143 @@ from utils.logger import app_logger
 # Locate db path in project root
 DB_NAME = "compliance.db"
 DB_PATH = os.getenv("COMPLIANCE_DB_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), DB_NAME))
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+class PostgreSQLRow:
+    """Mock Row class that implements both tuple-based indexing and dict-based indexing to mirror sqlite3.Row."""
+    def __init__(self, description, values):
+        self._keys = [desc[0] for desc in description] if description else []
+        self._values = list(values)
+        self._dict = dict(zip(self._keys, self._values))
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            return self._values[item]
+        return self._dict[item]
+
+    def keys(self):
+        return self._keys
+
+    def items(self):
+        return self._dict.items()
+
+    def __contains__(self, key):
+        return key in self._dict
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+class PostgreSQLCursor:
+    """Wrapper for PostgreSQL cursor that translates SQLite syntax and provides lastrowid fallback."""
+    def __init__(self, pg_cursor):
+        self._cursor = pg_cursor
+        self.lastrowid = None
+
+    def execute(self, query, params=None):
+        # 1. Translate parameter placeholders (? to %s)
+        translated_query = query.replace("?", "%s")
+        # 2. Translate table creation primary key autoincrement syntax
+        translated_query = translated_query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        
+        # 3. Translate SQLite unique conflict queries (INSERT OR IGNORE / INSERT OR REPLACE)
+        if "INSERT OR IGNORE INTO settings" in translated_query:
+            translated_query = translated_query.replace(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (%s, %s)",
+                "INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING"
+            )
+        if "INSERT OR REPLACE INTO settings" in translated_query:
+            translated_query = translated_query.replace(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (%s, %s)",
+                "INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
+            )
+            
+        # 4. Handle auto-increment key retrieval for postgres
+        is_insert = translated_query.strip().upper().startswith("INSERT")
+        if is_insert and "RETURNING" not in translated_query.upper():
+            if "INTO settings" not in translated_query.upper():
+                translated_query += " RETURNING id"
+
+        if params is not None:
+            self._cursor.execute(translated_query, params)
+        else:
+            self._cursor.execute(translated_query)
+
+        # 5. Extract returned ID to populate lastrowid
+        if is_insert and "INTO settings" not in translated_query.upper():
+            try:
+                row = self._cursor.fetchone()
+                if row:
+                    self.lastrowid = row[0]
+            except Exception:
+                pass
+
+    def executemany(self, query, seq_of_params):
+        translated_query = query.replace("?", "%s")
+        if "INSERT OR IGNORE INTO settings" in translated_query:
+            translated_query = translated_query.replace(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (%s, %s)",
+                "INSERT INTO settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO NOTHING"
+            )
+        self._cursor.executemany(translated_query, seq_of_params)
+
+    def fetchone(self):
+        res = self._cursor.fetchone()
+        if res is not None:
+            return PostgreSQLRow(self._cursor.description, res)
+        return None
+
+    def fetchall(self):
+        res = self._cursor.fetchall()
+        desc = self._cursor.description
+        return [PostgreSQLRow(desc, row) for row in res]
+
+    def close(self):
+        self._cursor.close()
+
+    def __iter__(self):
+        desc = self._cursor.description
+        for row in self._cursor:
+            yield PostgreSQLRow(desc, row)
+
+class PostgreSQLConnection:
+    """Wrapper for PostgreSQL connection to expose standard cursor interface."""
+    def __init__(self, pg_conn):
+        self._conn = pg_conn
+        self.row_factory = None
+
+    def cursor(self):
+        return PostgreSQLCursor(self._conn.cursor())
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
 
 def get_db_connection():
-    """Returns a connection to the SQLite database with row factory enabled."""
+    """Returns a connection to the database. Supports PostgreSQL if DATABASE_URL is configured, otherwise SQLite."""
+    if DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://"):
+        try:
+            import psycopg2
+            conn = psycopg2.connect(DATABASE_URL)
+            return PostgreSQLConnection(conn)
+        except ImportError:
+            app_logger.error("psycopg2 is required for PostgreSQL. Fallback to SQLite.")
+            
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     """Initializes the database schema if tables do not exist."""
-    app_logger.info("Initializing SQLite Database...")
+    db_type = "PostgreSQL" if DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://") else "SQLite"
+    app_logger.info(f"Initializing {db_type} Database...")
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -378,7 +505,7 @@ def add_sync_record(filename: str, last_modified: str, file_hash: str, sync_stat
         """, (filename, last_modified, file_hash, sync_status, s3_key, source_folder))
         record_id = cursor.lastrowid
         conn.commit()
-    except sqlite3.IntegrityError:
+    except Exception:
         record_id = -1
     conn.close()
     return record_id

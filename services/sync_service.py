@@ -41,6 +41,8 @@ class IngestionSyncService:
 
     def _run_loop(self):
         """Periodically run sync procedures."""
+        # Allow main thread database initialization to complete
+        time.sleep(5)
         while not self.stop_event.is_set():
             try:
                 self.sync_pipeline()

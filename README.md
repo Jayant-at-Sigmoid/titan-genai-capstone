@@ -1,8 +1,8 @@
-# Enterprise AI-Powered PDF Compliance & Governance Platform
+# Enterprise AI-Powered GRC Compliance & Governance Platform
 
-This platform is a production-grade GRC (Governance, Risk, and Compliance) solution designed to audit enterprise documents. It extracts, flags, reviews, and redacts sensitive data (PII, Confidential Information, Abusive/Unlawful Content, and Encoding Inconsistencies) from PDFs.
+This platform is a production-grade Governance, Risk, and Compliance (GRC) solution designed to audit enterprise documents. It extracts, flags, reviews, and redacts sensitive data (PII, Confidential Information, Abusive/Unlawful Content, and Encoding Inconsistencies) from both PDFs and plain-text/code formats.
 
-Leveraging **LangGraph** multi-agent orchestration, **AWS Bedrock** models, **SQLite** persistence, **FAISS** vector store, and **ReportLab** PDF generation, this app represents a complete enterprise governance pipeline.
+Leveraging **LangGraph** multi-agent orchestration, **AWS Bedrock** models (Amazon Nova), **PostgreSQL / SQLite** persistence, **FAISS** vector store, and **ReportLab** PDF generation, this application represents a complete, secure enterprise governance pipeline.
 
 ---
 
@@ -20,81 +20,78 @@ The platform operates on a modular, multi-tier pattern separating user interface
                           │   LangGraph Workflow   │
                           └───────────┬────────────┘
                                       │
-           ┌──────────────────────────┼──────────────────────────┐
-           ▼                          ▼                          ▼
- ┌───────────────────┐      ┌───────────────────┐      ┌───────────────────┐
- │   Agent Nodes     │      │   Services Layer  │      │  Database/Storage │
- ├───────────────────┤      ├───────────────────┤      ├───────────────────┤
- │ • PII Agent       │      │ • Bedrock LLM     │      │ • SQLite DB       │
- │ • Confidential Agt│      │ • Embedding Serv  │      │ • FAISS Vector DB │
- │ • Abuse Agent     │      │ • Rule Service    │      └───────────────────┘
- │ • Encoding Agent  │      └───────────────────┘
- │ • Reviewer Agent  │
- │ • Risk Agent      │
- └───────────────────┘
+            ┌──────────────────────────┼──────────────────────────┐
+            ▼                          ▼                          ▼
+  ┌───────────────────┐      ┌───────────────────┐      ┌───────────────────┐
+  │   Agent Nodes     │      │   Services Layer  │      │  Database/Storage │
+  ├───────────────────┤      ├───────────────────┤      ├───────────────────┤
+  │ • PII Agent       │      │ • Bedrock LLM     │      │ • PostgreSQL /    │
+  │ • Confidential Agt│      │ • Embedding Serv  │      │   SQLite DB       │
+  │ • Abuse Agent     │      │ • Rule Service    │      │ • FAISS Vector DB │
+  │ • Encoding Agent  │      └───────────────────┘      └───────────────────┘
+  │ • Reviewer Agent  │
+  │ • Risk Agent      │
+  └───────────────────┘
 ```
 
 ---
 
-## 🧠 LangGraph Workflow Orchestration
+## 🔥 Key Enterprise Features
 
-The PDF analysis uses a structured parallel state graph implemented using **LangGraph**:
+### 1. Multi-Format File Auditing
+Supports auditing file types other than PDFs, including:
+* **Code/Text files**: `.txt`, `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.c`, `.h`, `.cs`, `.go`, `.sh`, `.json`, `.csv`, `.md`, `.html`, `.css`, `.yaml`, `.yml`.
+* **Fallback Chunking Parser**: Non-PDF files are read using UTF-8 (with error replacement) and parsed into 3,000-character chunks that simulate "pages" so they can flow seamlessly through the parallel agent pipeline.
 
-1. **PDF Extractor Node**: Extracts PDF texts page-by-page using PyMuPDF and validates text health.
-2. **Parallel Agent Execution**:
-   - **PII Detection Agent**: Checks for emails, cards, addresses, Aadhaar, and PAN. Runs regex pre-checks to bypass LLM on clean pages.
-   - **Confidential Agent**: Scans for financial projections, trade secrets, and source code.
-   - **Abuse Agent**: Checks for harassment, threats, or slurs.
-   - **Encoding Agent**: Programmatically detects Mojibake or decoding errors.
-3. **Reviewer / Consensus Node**: Filters false positives, resolves duplicate alerts, and establishes severity consensus.
-4. **RAG Policy Validation Node**: Performs semantic checks against corporate policies stored in FAISS, linking violations to matching policies.
-5. **Risk Scoring Node**: Aggregates violation weights and outputs a compliance score (0-100) and risk level.
-6. **Report Generator Node**: Renders a PDF audit ledger and outputs a redacted version of the original document.
+### 2. Multi-Agent Orchestration & Consensus (LangGraph)
+Uses the **Mixture-of-Experts** agent pattern:
+* **Specialist Analysis**: Parallel agents scan pages for specific violation domains (PII, Confidentiality, Abuse).
+* **Consensus Filtering**: A **Reviewer Agent** runs consensus checks to filter false positives, resolve duplicate alerts, and normalize severity ratings.
+* **Vector-based RAG Validation**: Integrates FAISS to match findings against your indexed Corporate Policy guidelines and uses the LLM to justify the violation.
+
+### 3. Dynamic Database Compatibility (PostgreSQL & SQLite)
+Features a database translation layer in `database/db.py`:
+* **Local Development**: Uses local `compliance.db` (SQLite).
+* **Production Deployment**: Automatically detects if `DATABASE_URL` is set to PostgreSQL (e.g. Supabase, Neon) and handles syntax conversions on the fly:
+  * Translates placeholders (`?` to `%s`).
+  * Converts custom SQLite keywords (`INSERT OR IGNORE`/`INSERT OR REPLACE` to `ON CONFLICT DO NOTHING/UPDATE`).
+  * Automatically appends `RETURNING id` during inserts to dynamically support `lastrowid` fetches.
+  * Replicates `sqlite3.Row` dictionary-and-tuple indexing behavior.
+
+### 4. System Observability & Diagnostics Console
+* **Diagnostics Control Panel**: Real-time health diagnostic tools directly inside the UI displaying system configurations, database connection status, and background ingestion health.
+* **Interactive Regex Sandbox**: A playground to inspect how pre-check regex rules process custom text before calling the LLM.
+* **API Performance & Latency Analytics**: Detailed Plotly graphs charting latency timelines and pricing counts per model to analyze token usages and costs.
+
+### 5. Automated SMTP Email Alerts
+* **Failure Alerts**: Dispatches detailed email logs if the parsing or scanning pipeline encounters exceptions.
+* **Violation Alerts**: Instantly emails the security/governance team if a scan detects an overall `CRITICAL` risk or severe policy violation.
+* **Fallback Simulation**: Logs simulated emails locally if SMTP credentials are left blank.
 
 ---
 
-## 🔒 AWS Bedrock Integration & IAM Permissions
+## 🧠 Model Selection & Cost Optimization
+The platform leverages **Amazon Bedrock**:
+* **Amazon Nova Micro** (`amazon.nova-micro-v1:0`): Default fast model for rapid classification tasks ($0.000035/1k input tokens).
+* **Amazon Nova Lite** (`amazon.nova-lite-v1:0`): Default text model for complex reasoning, consensus, and RAG matching ($0.00006/1k input tokens).
+* **Titan Embeddings** (`amazon.titan-embed-text-v2:0`): Vectorizes corporate guidelines.
 
-The platform uses:
-- **Claude Haiku** (`anthropic.claude-3-haiku-20240307-v1:0`): Used for fast-pass entity extractions (PII, Abuse classification).
-- **Claude Sonnet** (`anthropic.claude-3-5-sonnet-20241022-v2:0`): Used for consensus reviews, policy checks, and executive risk summaries.
-- **Titan Embeddings** (`amazon.titan-embed-text-v2:0`): Used to vectorize and query corporate directives.
-
-### Required IAM Policy
-
-Ensure that the IAM principal executing this platform has the following permissions:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "bedrock:InvokeModel",
-        "bedrock:InvokeModelWithResponseStream"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
+### Cost Control Engine
+To minimize token consumption, the **PII Agent** runs a regex pre-check on the text first. If no matching candidate patterns (like card structures or email syntax) are found, it skips the LLM call entirely, saving up to 80% on scanning costs.
 
 ---
 
 ## 🚀 Setup & Execution
 
 ### 1. Configure the Environment
-Copy `.env.example` to `.env` and fill in your AWS details:
-
+Copy `.env.example` to `.env` and fill in your details:
 ```bash
 cp .env.example .env
 ```
 
-If you do not have AWS Bedrock keys set up, you can run the app in **Simulated Fallback Mode** by leaving `SIMULATION_MODE=True`. The application will simulate Bedrock responses and Titan embeddings deterministically, allowing local validation of all interfaces.
+To run in **Simulated Fallback Mode** (without connecting to AWS Bedrock), set `SIMULATION_MODE=True` in your `.env` file.
 
 ### 2. Local Installation
-
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -107,42 +104,55 @@ streamlit run app.py
 ```
 
 ### 3. Docker Deployment
-
 ```bash
 # Build Docker Image
-docker build -t pdf-compliance-platform .
+docker build -t grc-compliance-portal .
 
 # Run Container
-docker run -p 8501:8501 --env-file .env pdf-compliance-platform
+docker run -p 8501:8501 --env-file .env grc-compliance-portal
 ```
 
 ---
 
-## 📊 Demo Steps
+## ☁️ Deployment to Streamlit Community Cloud
 
-1. **Policy Upload (RAG)**:
-   - Navigate to `⚖️ Corporate Policy Manager`.
-   - Upload any policy guidance PDF (e.g. SEC financial policies or PII policies).
-   - Click `Ingest and Index Guidelines` to register it into the FAISS index.
-2. **Configure Rules**:
-   - Go to `⚙️ Compliance Rules Configurator`.
-   - Add a custom keyword/regex pattern (e.g. custom product code or proprietary term) and assign a severity.
-3. **Execute Scan**:
-   - Navigate to `📤 Upload & Scan PDF`.
-   - Upload your test document and run `Execute Compliance Scan`.
-   - Observe the agent logs and dynamic dashboard update.
-4. **Approve Violations**:
-   - Visit `👥 Human Review Interface`.
-   - Approve, Reject or add notes to the pending violations to test the feedback loop.
-5. **Download Artifacts**:
-   - Go to `Document Scanning History` on the scanning page.
-   - Download the generated ReportLab compliance report and the redacted document copy.
+### Step 1: Commit and Push to GitHub
+Ensure you add a `.gitignore` to prevent uploading your database and local secrets:
+```text
+.env
+*.db
+__pycache__/
+.streamlit/config.toml
+```
 
----
+### Step 2: Deploy on Streamlit Cloud
+1. Go to [share.streamlit.io](https://share.streamlit.io/) and select your repository, branch (`main`), and file (`app.py`).
+2. Click **Advanced Settings** -> **Secrets**.
+3. Paste your configurations in **TOML** format:
 
-## 📈 Scalability & Future Enhancements
+```toml
+# AWS Bedrock Authentication
+AWS_ACCESS_KEY_ID = "AKIA..."
+AWS_SECRET_ACCESS_KEY = "oreJT..."
+AWS_REGION = "us-east-1"
 
-- **Queue-based Batching**: In production, files can be queued using Celery/Redis for asynchronous scale.
-- **Database Scaling**: Swap SQLite with AWS Aurora/PostgreSQL for highly concurrent multi-tenant transaction tracking.
-- **Vector Database**: Deploy a dedicated Amazon OpenSearch or Pinecone cluster instead of local FAISS for multi-million policy segment scale.
-- **OCR fallback**: Add OCR support (e.g., Tesseract or Amazon Textract) for scanned/image-only PDFs.
+# Bedrock Model Identifiers
+BEDROCK_TEXT_MODEL = "amazon.nova-lite-v1:0"
+BEDROCK_FAST_MODEL = "amazon.nova-micro-v1:0"
+BEDROCK_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
+
+# Application Settings
+SIMULATION_MODE = "False"
+
+# Database (PostgreSQL Connection Pooler string - Port 6543)
+DATABASE_URL = "postgresql://postgres.[REF_ID]:[PASS]@aws-0-[REG].pooler.supabase.com:6543/postgres?sslmode=require"
+
+# Email Alert Configuration (SMTP)
+GRC_ALERT_EMAIL = "your-alerts@email.com"
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = "587"
+SMTP_USER = "sender@gmail.com"
+SMTP_PASS = "xxxx xxxx xxxx xxxx" # App Password
+```
+
+4. Click **Deploy**.

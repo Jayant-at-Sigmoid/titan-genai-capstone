@@ -1,0 +1,15 @@
+RecordID,EmployeeName,AadhaarID,PANCard,CreditCard,EmailAddress,SeverityTest
+EMP-001,Exposed Employee 1,5001 6001 7001,PQRTS2001K,4321 1112 2223 3334,leaked.profile.1@external-risk.net,CRITICAL_LEAK
+EMP-002,Exposed Employee 2,5002 6002 7002,PQRTS2002K,4321 1113 2224 3335,leaked.profile.2@external-risk.net,CRITICAL_LEAK
+EMP-003,John Doe,N/A,N/A,N/A,john.doe.3@enterprise.com,CLEAN
+EMP-004,Exposed Employee 4,5004 6004 7004,PQRTS2004K,4321 1115 2226 3337,leaked.profile.4@external-risk.net,CRITICAL_LEAK
+EMP-005,Exposed Employee 5,5005 6005 7005,PQRTS2005K,4321 1116 2227 3338,leaked.profile.5@external-risk.net,CRITICAL_LEAK
+EMP-006,John Doe,N/A,N/A,N/A,john.doe.6@enterprise.com,CLEAN
+EMP-007,Exposed Employee 7,5007 6007 7007,PQRTS2007K,4321 1118 2229 3340,leaked.profile.7@external-risk.net,CRITICAL_LEAK
+EMP-008,Exposed Employee 8,5008 6008 7008,PQRTS2008K,4321 1119 2230 3341,leaked.profile.8@external-risk.net,CRITICAL_LEAK
+EMP-009,John Doe,N/A,N/A,N/A,john.doe.9@enterprise.com,CLEAN
+EMP-010,Exposed Employee 10,5010 6010 7010,PQRTS2010K,4321 1121 2232 3343,leaked.profile.10@external-risk.net,CRITICAL_LEAK
+EMP-011,Exposed Employee 11,5011 6011 7011,PQRTS2011K,4321 1122 2233 3344,leaked.profile.11@external-risk.net,CRITICAL_LEAK
+EMP-012,John Doe,N/A,N/A,N/A,john.doe.12@enterprise.com,CLEAN
+EMP-013,Exposed Employee 13,5013 6013 7013,PQRTS2013K,4321 1124 2235 3346,leaked.profile.13@external-risk.net,CRITICAL_LEAK
+EMP-014,Exposed Employee 14,5014 6014 7014,PQRTS2014K,4321 1125 2236 3347,leaked.profile.14@external-risk.net,CRITICAL_LEAK

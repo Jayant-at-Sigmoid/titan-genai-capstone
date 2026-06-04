@@ -459,7 +459,16 @@ if active_idx != -1:
 menu_choice = st.session_state.nav_state
 
 # Operational efficiency footer
-metrics = llm_service.get_metrics()
+try:
+    db_metrics = get_model_metrics()
+    total_calls = len(db_metrics)
+    total_tokens = sum(m.get("input_tokens", 0) + m.get("output_tokens", 0) for m in db_metrics)
+    total_cost = sum(m.get("estimated_cost", 0.0) for m in db_metrics)
+except Exception:
+    total_calls = 0
+    total_tokens = 0
+    total_cost = 0.0
+
 st.sidebar.markdown(f"""
 <div style="margin: 16px 16px 8px; padding: 14px 16px;
             background: rgba(255, 255, 255, 0.04);
@@ -470,15 +479,15 @@ st.sidebar.markdown(f"""
                 margin-bottom: 10px;">Operational Efficiency</div>
     <div style="font-size: 12px; color: #94A3B8; margin-bottom: 5px;">
         <span style="color:#64748B">Model Calls&nbsp;&nbsp;</span>
-        <b style="color:#F1F5F9">{metrics['total_calls']}</b></div>
+        <b style="color:#F1F5F9">{total_calls}</b></div>
     <div style="font-size: 12px; color: #94A3B8; margin-bottom: 5px;">
         <span style="color:#64748B">Tokens Used&nbsp;&nbsp;</span>
-        <b style="color:#F1F5F9">{metrics['input_tokens'] + metrics['output_tokens']:,}</b></div>
+        <b style="color:#F1F5F9">{total_tokens:,}</b></div>
     <div style="font-size: 12px; color: #3B82F6; font-weight: 700;
                 margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1);
                 padding-top: 8px; display:flex; justify-content:space-between;">
         <span>Est. Cost</span>
-        <span>${metrics['estimated_cost_usd']:.4f} USD</span>
+        <span>${total_cost:.4f} USD</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -526,9 +535,9 @@ if new_candidates:
             st.success("Analysis complete.")
             st.rerun()
     with b_col3:
-        if st.button("Ignore Candidates", key="banner_ignore_btn"):
+        if st.button("Mark as Pending", key="banner_ignore_btn"):
             for candidate in new_candidates:
-                update_sync_status_by_hash(candidate["file_hash"], "Ignored")
+                update_sync_status_by_hash(candidate["file_hash"], "Pending")
             st.rerun()
 
 # Common stats loaders
@@ -1031,8 +1040,8 @@ elif menu_choice == "Compliance Analysis":
         # Status selection filter to allow re-running scans
         status_filter = st.multiselect(
             "Filter queue by file status",
-            options=["Synced", "Ignored", "Analyzed"],
-            default=["Synced", "Ignored"],
+            options=["Synced", "Pending", "Ignored", "Analyzed"],
+            default=["Synced", "Pending", "Ignored"],
             help="Select which files to list. You can select 'Ignored' or 'Analyzed' to run the compliance checks on them again."
         )
         
